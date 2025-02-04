@@ -2,20 +2,20 @@
 **AlgebraicTensors** implements tensors as algebraic objects (objects that can be scaled, added, and multiplied).  Building on the basic functionality of [TensorOperations.jl](https://github.com/Jutho/TensorOperations.jl), AlgebraicTensors provides a convenient way to express and performantly compute algebraic expressions involving vectors and linear operators in high-dimensonal product spaces, such as occur in quantum information science.
 
 ## Tensor Concept
-In AlgebraicTensors, a tensor is a multidimensional array in which each dimension is asociated with a distinct vector space. Each vector space is identified by a label and designated as either a "left" space or as a "right" space.  Left and right spaces with the same label are dual to each other.
+In AlgebraicTensors, a tensor is a multidimensional array in which each dimension is asociated with a distinct vector space. The associated vector space is identified by a whole-number label and designated as either a "left" space or as a "right" space.  Left and right spaces with the same label are dual to each other.
 A tensor
- $$
+$$
  T \in V_{l_1} \otimes \cdots \otimes V_{l_m} \otimes V^\dagger_{r_1} \otimes \cdots V^\dagger_{r_n}
- $$
-is represented by the type `Tensor{(l1,...,lm),(r1,...,rn)}`.  As suggested by the terminology, the array dimensions corresponding to left spaces always occur before the dimensions correpsonding to right spaces. 
+$$
+is represented by the type `Tensor{(l1,...,lm),(r1,...,rn)}`.  As suggested above, the array dimensions associated with left spaces always occur before the dimensions associated with right spaces. 
 The tensor element $T_{i_1,\ldots,i_m, j_1,\ldots,j_n}$ is accessed as `T[i1,...,im,j1,...,jn]`.
 
 
-Left and right spaces are analogous to the columns and rows of a matrix, respectively, and the tensors implemented here may be thought of as multidimensional generalizations of vectors and matrices. In a tensor multiplication expression `A*B`, right spaces of `A` and left spaces of `B` that are dual to each other are contracted (form inner products).
+Left and right spaces are analogous to the columns and rows of a matrix, respectively, and the tensors implemented here may be thought of as multidimensional generalizations of vectors and matrices. In a tensor multiplication expression `A*B`, right spaces of `A` and left spaces of `B` that are dual to each other are contracted (form inner products).  See below for details.
 
 
 ## Tensor Construction
-The standard way to construct a tensor is by providing an array and the spaces associated with its dimensions:
+The standard way to construct a tensor is to call the `Tensor` constructor with the vector spaces as type parameters and an array as the argument:
 ```
 julia> using AlgebraicTensors
 
@@ -50,11 +50,11 @@ A multidimensional vector is created by specifying an empty tuple for the right 
 ```
 julia> v = Tensor{(6,9),()}([1 2 3; 4 5 6])		# construct a vector
 ```
-Once constructed a tensor's spaces cannot be changed, but a convenient syntax enables one to create a new tensor with the same backing array and different spaces:
+Once a tensor is constructed its spaces cannot be changed; however, a convenient syntax enables one to create a new tensor with different spaces using the same underlying array:
 ```
 julia> t((5,6,8),(1,4))      # keep the data, set the spaces to (5,6,8),(1,4)
 ```
-Note that due to the freedom of operator ordering, the same mathematical tensor can be represented via different `Tensor` objects whose spaces and underlying array dimensions are in different orders. While most operations are insensitive to such mathematically equivalent orderings, operations that directly deal with array elements or dimensions (such as indexing) obviously depend on the chosen ordering. 
+Note that the same mathematical tensor can be represented by different `Tensor` objects whose spaces and underlying array dimensions are in different orders. Mathematical and logical operations on tensors are insensitive to the ordering of spaces, but operations that directly deal with array elements or dimensions (such as indexing) obviously depend on the chosen ordering. See also [Order of Spaces in Tensor Operations](#order-of-spaces-in-tensor-oprations).
 
 ## Some Tensor Operations
 ```
@@ -78,7 +78,7 @@ julia> transpose(X, 5)		# (partial) transpose
 
 julia> eig(S)					# eigenvalues (square tensors only)
 ```
-Some tensor operations are defined only for certain combinations of left and right spaces.  For example, addition and subtraction are defined only for tensors with the same spaces.  Likewise, analytic functions are defined only for "square" tensors: tensors whose left and right spaces are the same, and whose corresponding left and right array dimensions have the same axes.
+Some tensor operations are defined only for certain combinations of left and right spaces.  For example, addition and subtraction are defined only for tensors with the same spaces (though the spaces need not be in the same order).  Likewise, analytic functions are defined only for "square" tensors: tensors whose left and right spaces are the same (again, insensitive to order), and whose corresponding left and right array dimensions have the same axes.
 
 
 ## Other Functions
@@ -87,7 +87,28 @@ A `Tensor` can be converted to a `Matrix` by folding all the left spaces into th
 ```
 julia> Matrix(t)
 ```
-This is sometimes helpful for inspecting tensors that represent linear operators.
+This is sometimes helpful for viewing tensors that represent linear operators.
+
+
+## Order of Spaces in Tensor Operations
+
+As noted above, the same tensor can be represented with different orderings of its spaces. Operations that result in a new tensor must choose a particular ordering of the spaces for the output. `AlgebraicTensors` adopts the following conventions, which attempt to balance convenience and logical consistency:
+
+| Operation  | Order of Output Spaces  |
+| --- | --- |
+| addition `+`, subtraction `-` | Same as the first argument |
+| outer product `⊗` | Those of the first argument, followed by those of the second |
+| scalar multiplication `*` | same as input |
+| tensor contraction `*` | sorted  |
+| adjoint, full transpose  | Left and right spaces swapped, preserving internal order |
+| partial transpose | sorted |
+| `eig`, `svd`  | same as input |
+| trace  | same as input with designed spaces omitted |
+| indexing | same as input with scalar-indexed spaces omitted |
+| analytic functions | same as input |
+| mutating operations | same as input |
+
+Here "sorted" means the left spaces and right spaces are each in ascending numerical order.
 
 
 ## Implementation
