@@ -2,11 +2,13 @@
 **AlgebraicTensors** implements tensors as algebraic objects (objects that can be scaled, added, and multiplied).  Building on the basic functionality of [TensorOperations.jl](https://github.com/Jutho/TensorOperations.jl), AlgebraicTensors provides a convenient way to express and performantly compute algebraic expressions involving vectors and linear operators in high-dimensonal product spaces, such as occur in quantum information science.
 
 ## Tensor Concept
-In AlgebraicTensors, a tensor is a multidimensional array in which each dimension is asociated with a distinct vector space. The associated vector space is identified by a whole-number label and designated as either a "left" space or as a "right" space.  Left and right spaces with the same label are dual to each other.
+In AlgebraicTensors, a tensor is a multidimensional array in which each dimension is asociated with a distinct vector space. The associated vector space is identified by a label (an integer from 1 to 127) and designated as either a "left" space or as a "right" space.  Left and right spaces with the same label are dual to each other.
 A tensor
+
 $$
- T \in V_{l_1} \otimes \cdots \otimes V_{l_m} \otimes V^\dagger_{r_1} \otimes \cdots V^\dagger_{r_n}
+T \in V_{l_1} \otimes \cdots \otimes V_{l_m} \otimes V^\dagger_{r_1} \otimes \cdots V^\dagger_{r_n}
 $$
+
 is represented by the type `Tensor{(l1,...,lm),(r1,...,rn)}`.  As suggested above, the array dimensions associated with left spaces always occur before the dimensions associated with right spaces. 
 The tensor element $T_{i_1,\ldots,i_m, j_1,\ldots,j_n}$ is accessed as `T[i1,...,im,j1,...,jn]`.
 

@@ -2,7 +2,7 @@
 
 julia_version = "1.10.4"
 manifest_format = "2.0"
-project_hash = "8207240300c02b391a74d7eb6aa311f6a8594c44"
+project_hash = "3818e832f0308c5f4f74f7d6f38b6404c389452d"
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
@@ -121,14 +121,6 @@ version = "0.3.2"
 
     [deps.StridedViews.weakdeps]
     CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
-
-[[deps.SuperTuples]]
-deps = ["StaticArrays", "StaticArraysCore"]
-git-tree-sha1 = "2b093aa93dd0ffba4abffe95bd389b867d296758"
-repo-rev = "master"
-repo-url = "https://github.com/benninkrs/SuperTuples.jl"
-uuid = "2532fb96-5642-438b-b515-97252d17ad77"
-version = "0.3.10"
 
 [[deps.TOML]]
 deps = ["Dates"]
