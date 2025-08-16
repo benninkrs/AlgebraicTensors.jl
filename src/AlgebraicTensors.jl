@@ -1005,10 +1005,12 @@ function *(A::Tensor, B::Tensor)
 	odimsA = (oneto(nlspaces(A))..., urdimsA...)
 	odimsB = (uldimsB..., tuplerange(nlspaces(B)+1, ndims(B))...)
 	
+
 	# output spaces in sorted order
-	lspaces_ = findnzbits(Val(LS_))
+	lspaces_ = findnzbits(Val(LS_))	# TODO: somehow this is not getting inferred
 	rspaces_ = findnzbits(Val(RS_))
 	
+	# return (lspaces_, rspaces_)
 	# Default order produced by tensorcontract is (odimsA, odimsB) = (ldimsA, urdimsA, uldimsB, rdimsB)										
 	# This needs to be permuted to (sort(ldimsA ∪ uldimsB), sort(urdimsA ∪ rdimsB))
 	blocklengths = (nlspaces(A), length(urdimsA), length(uldimsB), nrspaces(B))
@@ -1034,6 +1036,8 @@ function *(A::Tensor, B::Tensor)
 	# println("pc1 = ", pc1)
 	# println("i2 = ", i2)
 	# println("pc2 = ", pc2)
+	# println("lspaces_ = ", lspaces_)
+	# println("rspaces_ = ", rspaces_)
 
 	data_ = tensorcontract(A.data, (odimsA, cdimsA), false, B.data, (cdimsB, odimsB), false, (pc1, pc2))
 
@@ -1271,7 +1275,7 @@ end
 # Returns a Bool tuple of the same size as the input
 function isin(spaces::Dims, ::Val{S}) where {S}
 	S isa SpacesInt || error("S must be a SpacesInt")
-	mask = ntuple(i -> (S & (SpacesInt(1) << (spaces[i]-1))) != SpacesInt(0), length(spaces))
+	mask = ntuple(i -> (S & (SpacesInt(1) << (spaces[i]-1))) != SpacesInt(0), Val(length(spaces)))
 end
 
 # find the dimensions of selected left spaces (specified by a SpacesInt)
@@ -1285,7 +1289,7 @@ function findlspaces(M::Tensor, ::Val{S}; order) where {S}	# S is a SpacesInt
 	if order == :sorted
 		odims = findnzbits((~S & MS), MS)
 	elseif order == :original
-		odims =oneto(nlspaces(M))[isin(lspaces(M), Val(~S))]
+		odims = oneto(nlspaces(M))[isin(lspaces(M), Val(~S))]
 	else
 		error("Invalid order specified: $order")
 	end
@@ -1310,6 +1314,7 @@ function findrspaces(M::Tensor, ::Val{S}; order)  where {S}
 	end
 	return (sdims, odims)
 end
+
 
 # Construct a permutation formed by reordering blocks of given sizes
 function blockperm(siz, perm)
