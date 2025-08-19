@@ -96,15 +96,14 @@ As noted above, the same tensor can be represented with different orderings of i
 
 | Operation  | Order of Output Spaces  |
 | --- | --- |
-| addition `+`, subtraction `-` | Same as the first argument |
-| outer product `⊗` | Those of the first argument, followed by those of the second |
+| addition `+`, subtraction `-` | Same as those of the first argument |
 | scalar multiplication `*` | same as input |
-| tensor contraction `*` | sorted  |
-| adjoint, full transpose  | Left and right spaces swapped, preserving internal order |
-| partial transpose | sorted |
-| `eig`, `svd`  | same as input |
-| trace  | same as input with designed spaces omitted |
+| tensor product `A*B` | Spaces of A followed by spaces of B |
+| adjoint, full transpose  | Left and right spaces swapped, preserving respective order |
+| partial transpose | Unpaired transposed spaces at the end; all others remainin place |
+| trace  | same as input with designated spaces omitted |
 | indexing | same as input with scalar-indexed spaces omitted |
+| `eig`, `svd`  | same as input |
 | analytic functions | same as input |
 | mutating operations | same as input |
 
@@ -123,7 +122,11 @@ Most of the tensor operations provided by AlgebraicTensors are efficiently imple
 
 AlgebraicTensors complements existing Julia tensor packages:
  * In [Tensors.jl](https://github.com/Ferrite-FEM/Tensors.jl), tensors can have only 1, 2, or 4 dimensions and maximum length 3 in any dimension.  AlgebraicTensors supports tensors of (practically) arbitrary size and dimensionality.
- * [Einsum.jl](https://github.com/ahwillia/Einsum.jl) and the macros provided by [TensorOperations.jl](https://github.com/Jutho/TensorOperations.jl) provide an index-based syntax similar to Einstein notation for implementing contraction and other operations on multidimensional arrays.  This requires a labelling of the dimensions, which determine the contraction pattern, to be "hard coded" into the expression. AlgebraicTensors implements tensors as algebraic objects that can be multiplied and added using standard syntax, with the dimensions to be contracted (or not) determined programmatically from the spaces associated with each tensor. 
+
+ * [Einsum.jl](https://github.com/ahwillia/Einsum.jl) and the macros provided by [TensorOperations.jl](https://github.com/Jutho/TensorOperations.jl) provide an index-based syntax similar to Einstein notation for implementing contraction and other operations on multidimensional arrays.  This requires a labelling of the dimensions, which determine the contraction pattern, to be "hard coded" into the expression. AlgebraicTensors implements tensors as algebraic objects that can be multiplied and added using standard syntax, with the dimensions to be contracted (or not) determined programmatically from the spaces associated with each tensor. TensorOperations automatically optimizes the order of contraction in expressions, whereas in AlgebraicTensors the contraction order and is determined by the order of operations in the expression.
+
  * [TensorKit.jl](https://github.com/Jutho/TensorKit.jl) is the most similar package. It too implements tensors as multilinear maps, however with an emphasis on category theoretic aspects.
-     * In **TensorKit**, vector spaces are first-class objects defined by their dimensionality and underlying scalar field.  However, vector spaces that are mathematically equivalent are not distinguished. Tensor multiplication `A*B` either requires the domain of `A`` to coincide with the codomain of `B` or requires an explicit indication of dimension pairs to be contracted.
-	  * In **AlgebraicTensors**, vector spaces are never explicitly defined; they are simply designated by arbitrary labels. The labels distinguish vector spaces and give them identity apart from any mathematical properties that might be imputed to them. In tensor multiplication `A*B`, the vector space labels determine whether the operation is valid, which dimensions of `A` and `B` should be contracted, and which dimensions should form outer products.   
+     * In **TensorKit**, vector spaces are first-class objects defined by their dimensionality and underlying scalar field.  Vector spaces that are mathematically equivalent are not distinguished. Tensor multiplication `A*B` either requires the domain of `A`` to coincide with the codomain of `B` or requires an explicit indication of dimension pairs to be contracted.
+	  * In **AlgebraicTensors**, vector spaces are implicit and are simply designated by arbitrary labels. They have identity apart from any mathematical properties that might be imputed to them. In tensor multiplication `A*B`, the vector space labels determine whether the operation is valid, which dimensions of `A` and `B` should be contracted, and which dimensions should form outer products.
+
+ * [ITensor.jl](https://itensor.org/) is a general purpose tensor library with many more features than AlgebraicTensors. As in most of the other packages, indices are first-class, explicitly-defined objects. Comparison is still underway, but it appears that ITensor is slower than AlgebraicTensor for some operations involving small tensors, while faster than AlgebraicTensor for some operations on large tensors.

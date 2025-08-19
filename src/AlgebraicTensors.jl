@@ -27,7 +27,7 @@ Constructors			Done, performant
 getindex					Done, performant
 setindex!				Done, performant
 ==							Done, performant
-+,-						Done, performant (but can be better)
++,-						Done, performant
 adjoint					Done, performant
 transpose				Done, performant
 partial transpose		Done, performant
@@ -91,10 +91,10 @@ const Axes{N} = NTuple{N, AbstractUnitRange{<:Integer}}
 const SupportedArray{T,N} = DenseArray{T,N}		# can change this later.  Maybe to StridedArray?
 
 
-# # Can we find a better approach to calc_strides and diagonal_op?
-# calc_strides(sz::Dims{N}) where {N} = cumprod(ntuple(i -> i==1 ? 1 : sz[i-1], Val(N)))
-# calc_strides(ax::Axes{N}) where {N} = cumprod(ntuple(i -> i==1 ? 1 : last(ax[i-1]) - first(ax[i-1]) + 1, Val(N)))
-# @inline calc_index(I::CartesianIndex{N}, strides::NTuple{N,Int}) where {N} = 1 + sum((Tuple(I) .- 1) .* strides)
+calc_strides(sz::Dims{N}) where {N} = cumprod(ntuple(i -> i==1 ? 1 : sz[i-1], Val(N)))
+calc_strides(ax::Axes{N}) where {N} = cumprod(ntuple(i -> i==1 ? 1 : last(ax[i-1]) - first(ax[i-1]) + 1, Val(N)))
+@inline calc_index(I::CartesianIndex{N}, strides::NTuple{N,Int}) where {N} = 1 + sum((Tuple(I) .- 1) .* strides)
+
 
 # # Perform an operation along the diagonal of an array
 # # PROBABLY DOESN'T WORK FOR NON-SQUARE TENSORS
@@ -519,7 +519,8 @@ end
 	transpose(tensor, space)
 	transpose(tensor, spaces)
 Toggle the "direction" (left or right) of specified tensor spaces. Any `spaces` that are not
-present in `tensor` are ignored.  The spaces of the output tensor are sorted.
+present in `tensor` are ignored.  Unpaired transposed spaces are moved to the end; all other
+spaces remain in their original order.
 """
 transpose(M::Tensor, ts::Int) = transpose(M, Val((ts,)))
 transpose(M::Tensor, ts::Dims) = transpose(M, Val(ts))
@@ -527,51 +528,53 @@ function transpose(M::Tensor, ::Val{tspaces}) where {tspaces}
 	LS = lspaces_int(M)
 	RS = rspaces_int(M)
 	
-	NL = nlspaces(M)
-	NR = nrspaces(M)
-
 	TS = binteger(SpacesInt, Val(tspaces))
-	TSL = TS & LS		# transposed spaces on the left side
-	TSR = TS & RS		# transposed spaces on the right side
 
-
-	if iszero(TSL) && iszero(TSR)
+	TSL = TS & LS & ~RS		# transposed spaces on left only
+	TSR = TS & RS & ~LS 		# transposed spaces on right only
+	TSB = TS & LS & RS		# transposed spaces on both left and right sides
+	
+	if iszero(TSL) && iszero(TSR) && iszero(TSB)
 		# nothing to transpose
 		return M
 	else
-	
-		(tldims, oldims) = findlspaces(M, Val(TSL); order = :original)
-		(trdims, ordims) = findrspaces(M, Val(TSR); order = :original)
 
-		# dimensions of output spaces (unsorted)
-		ldims = (oldims..., trdims...)
-		rdims = (ordims..., tldims...)
+		# transposed spaces that are on both left and right
+		tsboth = findnzbits(TSB)
 
-		# output spaces
+		# transposed spaces that are only on the left or right
+		tldims = findlspaces(M, Val(TSL); order = :original)			# 
+		trdims = findrspaces(M, Val(TSR); order = :original)
+
+		# untransposed spaces and both-sides transposed spaces
+		oldims = findlspaces(M, Val(LS ⊻ TSL); order = :original)
+		ordims = findrspaces(M, Val(RS ⊻ TSR); order = :original)
+
+
+		# println("tldims = ", tldims)
+		# println("trdims = ", trdims)
+		# println("oldims = ", oldims)
+		# println("ordims = ", ordims)
+		# println("tsboth = ", tsboth)
+
+		
+		lswap_ind = findin(spaces(M)[oldims], tsboth)	# indices of left dimensions swapping with right
+		rswap_ind = findin(spaces(M)[ordims], tsboth)	# indices of right dimensions swapping with left
+
+		# swap selected left and right dimensinos
+		mixedldims = setindex(oldims, ordims[rswap_ind], lswap_ind)
+		mixedrdims = setindex(ordims, oldims[lswap_ind], rswap_ind)
+
+		# assemble the dimensions in order
+		ldims = (mixedldims..., trdims...)
+		rdims = (mixedrdims..., tldims...)
+
 		lspaces_ = spaces(M)[ldims];
 		rspaces_ = spaces(M)[rdims];
 
 		# println("ldims = ", ldims)
-		# println("lspaces = ", lspaces_)
 		# println("rdims = ", rdims)
-		# println("rspaces = ", rspaces_)
-
-		# sort output spaces
-		lperm = sortperm(lspaces_);
-		lspaces_ = lspaces_[lperm]
-		ldims = ldims[lperm]
-
-		rperm = sortperm(rspaces_);
-		rspaces_ = rspaces_[rperm]
-		rdims = rdims[rperm]
-
-		# println("ldims = ", ldims)
-		# println("lspaces = ", lspaces_)
-		# println("rdims = ", rdims)
-		# println("rspaces = ", rspaces_)
-
 		arr = permutedims(M.data,  (ldims..., rdims...))
-
 
 		return Tensor{lspaces_, rspaces_}(arr)
 	end
@@ -603,11 +606,15 @@ function tr(M::Tensor)
 		return s
 		
 	else
-		(ldims, _) = findlspaces(M, Val(LS); order = :original)
-		(rdims, _) = findrspaces(M, Val(RS); order = :original)
+		# (ldims, _) = findlspaces_old(M, Val(LS); order = :original)
+		# (rdims, _) = findrspaces_old(M, Val(RS); order = :original)
+
+		ldims = findlspaces(M, Val(LS); order = :sorted)
+		rdims  = findrspaces(M, Val(RS); order = :sorted)
+
 		return trace_array(M.data, Val(()), Val(ldims), Val(rdims))
-		# (ldims, uldims) = findlspaces(M, Val(LS))
-		# (rdims, urdims) = findrspaces(M, Val(RS))
+		# (ldims, uldims) = findlspaces_old(M, Val(LS))
+		# (rdims, urdims) = findrspaces_old(M, Val(RS))
 		# return tensorscalar(tensortrace(((),()), M.data, (ldims, rdims), :N))
 	end
 end
@@ -641,8 +648,13 @@ function tr(M::Tensor, ::Val{tspaces}) where {tspaces}
 	
 	TLS == TRS || error("Invalid spaces to be traced")
 	
-	(ldims, uldims) = findlspaces(M, Val(TLS); order = :original)
-	(rdims, urdims) = findrspaces(M, Val(TRS); order = :original)
+	# (ldims, uldims) = findlspaces_old(M, Val(TLS); order = :original)
+	# (rdims, urdims) = findrspaces_old(M, Val(TRS); order = :original)
+
+	ldims = findlspaces(M, Val(TLS); order = :sorted)
+	rdims = findrspaces(M, Val(TRS); order = :sorted)
+	uldims = findlspaces(M, Val(~TLS); order = :original)
+	urdims = findrspaces(M, Val(~TRS); order = :original)
 
 	# println(spaces)
 	# println(ldims)
@@ -709,8 +721,8 @@ end
 # 	RS = rspaces_int(M)
 # 	LS == RS || error("To trace a tensor, it must have matching left and right spaces")
 	
-# 	(ldims, _) = findlspaces(M, Val(LS))
-# 	(rdims, _) = findrspaces(M, Val(RS))
+# 	(ldims, _) = findlspaces_old(M, Val(LS))
+# 	(rdims, _) = findrspaces_old(M, Val(RS))
 # 	return tensorscalar(tensortrace(((),()), M.data, (ldims, rdims), :N))
 # end
 
@@ -728,8 +740,8 @@ end
 # 	TLS == TRS || error("Invalid spaces to be traced")
 	
 # 	TS = TLS
-# 	(ldims, uldims) = findlspaces(M, Val(TS))
-# 	(rdims, urdims) = findrspaces(M, Val(TS))
+# 	(ldims, uldims) = findlspaces_old(M, Val(TS))
+# 	(rdims, urdims) = findrspaces_old(M, Val(TS))
 
 # 	data_ = tensortrace((uldims, urdims), M.data, (ldims, rdims), :N)
 # 	lspaces_ = spaces(M)[uldims]
@@ -994,35 +1006,25 @@ function *(A::Tensor, B::Tensor)
 	LSA & ULSB == SpacesInt(0) || error("A and B have uncontracted left spaces in common")
 	RSB & URSA == SpacesInt(0) || error("A and B have uncontracted right spaces in common")
 	
-	LS_ = LSA | ULSB		# left spaces of result
-	RS_ = RSB | URSA		# right spaces of resul
-
 	# match up indices for inner and outer products
-	(cdimsA, urdimsA) = findrspaces(A, Val(CS); order = :original)
-	(cdimsB, uldimsB) = findlspaces(B, Val(CS); order = :original)
-	
-	# uncontracted dimensions of A,B
+	# (cdimsA, urdimsA) = findrspaces_old(A, Val(CS); order = :original)
+	# (cdimsB, uldimsB) = findlspaces_old(B, Val(CS); order = :original)
+
+	cdimsA = findrspaces(A, Val(CS); order = :sorted)
+	cdimsB  = findlspaces(B, Val(CS); order = :sorted)
+	urdimsA = findrspaces(A, Val(~CS); order = :original)
+	uldimsB = findlspaces(B, Val(~CS); order = :original)
+
 	odimsA = (oneto(nlspaces(A))..., urdimsA...)
 	odimsB = (uldimsB..., tuplerange(nlspaces(B)+1, ndims(B))...)
 	
-
-	# output spaces in sorted order
-	lspaces_ = findnzbits(Val(LS_))	# TODO: somehow this is not getting inferred
-	rspaces_ = findnzbits(Val(RS_))
+	lspaces_ = (lspaces(A)..., spaces(B)[uldimsB]...) 
+	rspaces_ = (spaces(A)[urdimsA]..., rspaces(B)...)
 	
-	# return (lspaces_, rspaces_)
-	# Default order produced by tensorcontract is (odimsA, odimsB) = (ldimsA, urdimsA, uldimsB, rdimsB)										
-	# This needs to be permuted to (sort(ldimsA ∪ uldimsB), sort(urdimsA ∪ rdimsB))
-	blocklengths = (nlspaces(A), length(urdimsA), length(uldimsB), nrspaces(B))
-	blockstarts = 1 .+ (0, cumsum(blocklengths)...)
-	blockends = cumsum(blocklengths)
-
-	# Note, we don't have to use oneto() or tuplerange().
-	# Because the ranges are compile-time constants, so are the resulting tuples.
-	i1 = (blockstarts[1]:blockends[1]..., blockstarts[3]:blockends[3]...)
-	pc1 = i1[sortperm((lspaces(A)..., uldimsB...))]
-	i2 = (blockstarts[2]:blockends[2]..., blockstarts[4]:blockends[4]...)
-	pc2 = i2[sortperm((urdimsA..., rspaces(B)...))]
+	# Order produced by tensorcontract:  (ldimsA, urdimsA, uldimsB, rdimsB)
+	blocksizes = (nlspaces(A), length(urdimsA), length(uldimsB), nrspaces(B))
+	pc1 = blockperm(blocksizes, (1,3))
+	pc2 = blockperm(blocksizes, (2,4))
 	
 	# println("cdimsA = ", cdimsA)
 	# println("urdimsA = ", urdimsA)
@@ -1030,12 +1032,9 @@ function *(A::Tensor, B::Tensor)
 	# println("cdimsB = ", cdimsB)
 	# println("uldimsB = ", uldimsB)
 	# println("odimsB = ", odimsB)
-	# println("starts = ", blockstarts)
-	# println("ends = ", blockends)
-	# println("i1 = ", i1)
 	# println("pc1 = ", pc1)
-	# println("i2 = ", i2)
 	# println("pc2 = ", pc2)
+
 	# println("lspaces_ = ", lspaces_)
 	# println("rspaces_ = ", rspaces_)
 
@@ -1045,12 +1044,13 @@ function *(A::Tensor, B::Tensor)
 end
 
 
+
 # faster version when right spaces of A exactly match the left spaces of B
 function *(A::Tensor{lspaces,cspaces}, B::Tensor{cspaces,rspaces}) where {lspaces, rspaces, cspaces}
 	# The right spaces of A are the same as the left spaces of B
 	axes(A)[rspace_srt_dims(A)] == axes(B)[lspace_srt_dims(B)] || throw(Base.DimensionMismatch("non-matching sizes in contracted dimensions")) 
 	data_= reshape(Matrix(A) * Matrix(B), (lsize(A)..., rsize(B)...))
-	sortspaces(Tensor{lspaces, rspaces}(data_))
+	Tensor{lspaces, rspaces}(data_)
 end
 
 
@@ -1278,41 +1278,71 @@ function isin(spaces::Dims, ::Val{S}) where {S}
 	mask = ntuple(i -> (S & (SpacesInt(1) << (spaces[i]-1))) != SpacesInt(0), Val(length(spaces)))
 end
 
-# find the dimensions of selected left spaces (specified by a SpacesInt)
-#  sdims = dimensions corresponding to the sorted spaces specified by S
-#				(typically a set of dimensions to be contracted)
-#  odims = remaining dimensions in ORIGINAL or SORTED order
-#				(typically a set of dimension that remain after contraction)
+# # find the dimensions of selected left spaces (specified by a SpacesInt)
+# #  sdims = dimensions corresponding to the sorted spaces specified by S
+# #				(typically a set of dimensions to be contracted)
+# #  odims = remaining dimensions in ORIGINAL or SORTED order
+# #				(typically a set of dimension that remain after contraction)
+# function findlspaces_old(M::Tensor, ::Val{S}; order) where {S}	# S is a SpacesInt
+# 	MS = binteger(SpacesInt, Val(lspaces(M)))
+# 	sdims = lspace_srt_dims(M)[findnzbits(S, MS)]
+# 	if order == :sorted
+# 		odims = findnzbits((~S & MS), MS)
+# 	elseif order == :original
+# 		odims = oneto(nlspaces(M))[isin(lspaces(M), Val(~S))]
+# 	else
+# 		error("Invalid order specified: $order")
+# 	end
+# 	return (sdims, odims)
+# end
+
+
+
+# # find the dimensions of selected right spaces (specified by a SpacesInt)
+# #  sdims = dimensions corresponding to the sorted spaces specified by S
+# #				(typically a set of dimensions to be contracted)
+# #  odims = remaining dimensions in ORIGINAL or SORTED order
+# #				(typically a set of dimension that remain after contraction)
+# function findrspaces_old(M::Tensor, ::Val{S}; order)  where {S}
+# 	MS = binteger(SpacesInt, Val(rspaces(M)))
+# 	sdims = rspace_srt_dims(M)[findnzbits(S, MS)]
+# 	if order == :sorted
+# 		odims = nlspaces(M) .+ findnzbits((~S & MS), MS)
+# 	elseif order == :original
+# 		odims = nlspaces(M) .+ oneto(nrspaces(M))[isin(rspaces(M), Val(~S))]
+# 	else
+# 		error("Invalid order specified: $order")
+# 	end
+# 	return (sdims, odims)
+# end
+
+
+# Find the dimensions of left spaces selected by a SpacesInt,
+# returned in either original or sorted order.
 function findlspaces(M::Tensor, ::Val{S}; order) where {S}	# S is a SpacesInt
 	MS = binteger(SpacesInt, Val(lspaces(M)))
-	sdims = lspace_srt_dims(M)[findnzbits(S, MS)]
 	if order == :sorted
-		odims = findnzbits((~S & MS), MS)
+		return lspace_srt_dims(M)[findnzbits(S, MS)]
 	elseif order == :original
-		odims = oneto(nlspaces(M))[isin(lspaces(M), Val(~S))]
+		return oneto(nlspaces(M))[isin(lspaces(M), Val(S))]
 	else
 		error("Invalid order specified: $order")
 	end
-	return (sdims, odims)
 end
 
 
-# find the dimensions of selected right spaces (specified by a SpacesInt)
-#  sdims = dimensions corresponding to the sorted spaces specified by S
-#				(typically a set of dimensions to be contracted)
-#  odims = remaining dimensions in ORIGINAL or SORTED order
-#				(typically a set of dimension that remain after contraction)
-function findrspaces(M::Tensor, ::Val{S}; order)  where {S}
+
+# Find the dimensions of left spaces selected by a SpacesInt,
+# returned in either original or sorted order.
+function findrspaces(M::Tensor, ::Val{S}; order) where {S}	# S is a SpacesInt
 	MS = binteger(SpacesInt, Val(rspaces(M)))
-	sdims = rspace_srt_dims(M)[findnzbits(S, MS)]
 	if order == :sorted
-		odims = nlspaces(M) .+ findnzbits((~S & MS), MS)
+		return rspace_srt_dims(M)[findnzbits(S, MS)]
 	elseif order == :original
-		odims = nlspaces(M) .+ oneto(nrspaces(M))[isin(rspaces(M), Val(~S))]
+		return nlspaces(M) .+ oneto(nrspaces(M))[isin(rspaces(M), Val(S))]
 	else
 		error("Invalid order specified: $order")
 	end
-	return (sdims, odims)
 end
 
 

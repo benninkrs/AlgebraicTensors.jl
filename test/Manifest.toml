@@ -2,9 +2,11 @@
 
 [[Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
+version = "1.11.0"
 
 [[Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
+version = "1.11.0"
 
 [[BenchmarkTools]]
 deps = ["Compat", "JSON", "Logging", "Printf", "Profile", "Statistics", "UUIDs"]
@@ -14,9 +16,9 @@ version = "1.6.0"
 
 [[Compat]]
 deps = ["TOML", "UUIDs"]
-git-tree-sha1 = "8ae8d32e09f0dcf42a36b90d4e17f5dd2e4c4215"
+git-tree-sha1 = "0037835448781bb46feb39866934e243886d756a"
 uuid = "34da2185-b29b-5c13-b0c7-acf172513d20"
-version = "4.16.0"
+version = "4.18.0"
 weakdeps = ["Dates", "LinearAlgebra"]
 
     [Compat.extensions]
@@ -30,10 +32,12 @@ version = "1.1.1+0"
 [[Dates]]
 deps = ["Printf"]
 uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
+version = "1.11.0"
 
 [[InteractiveUtils]]
 deps = ["Markdown"]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
+version = "1.11.0"
 
 [[JSON]]
 deps = ["Dates", "Mmap", "Parsers", "Unicode"]
@@ -43,31 +47,36 @@ version = "0.21.4"
 
 [[Libdl]]
 uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+version = "1.11.0"
 
 [[LinearAlgebra]]
 deps = ["Libdl", "OpenBLAS_jll", "libblastrampoline_jll"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+version = "1.11.0"
 
 [[Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
+version = "1.11.0"
 
 [[Markdown]]
 deps = ["Base64"]
 uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
+version = "1.11.0"
 
 [[Mmap]]
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
+version = "1.11.0"
 
 [[OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
-version = "0.3.23+4"
+version = "0.3.27+1"
 
 [[Parsers]]
 deps = ["Dates", "PrecompileTools", "UUIDs"]
-git-tree-sha1 = "8489905bcdbcfac64d1daa51ca07c0d8f0283821"
+git-tree-sha1 = "7d2f8f21da5db6a806faf7b9b292296da42b2810"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
-version = "2.8.1"
+version = "2.8.3"
 
 [[PrecompileTools]]
 deps = ["Preferences"]
@@ -77,21 +86,23 @@ version = "1.2.1"
 
 [[Preferences]]
 deps = ["TOML"]
-git-tree-sha1 = "9306f6085165d270f7e3db02af26a400d580f5c6"
+git-tree-sha1 = "0f27480397253da18fe2c12a4ba4eb9eb208bf3d"
 uuid = "21216c6a-2e73-6563-6e65-726566657250"
-version = "1.4.3"
+version = "1.5.0"
 
 [[Printf]]
 deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+version = "1.11.0"
 
 [[Profile]]
-deps = ["Printf"]
 uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
+version = "1.11.0"
 
 [[Random]]
 deps = ["SHA"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+version = "1.11.0"
 
 [[SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
@@ -99,21 +110,19 @@ version = "0.7.0"
 
 [[Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
-
-[[SparseArrays]]
-deps = ["Libdl", "LinearAlgebra", "Random", "Serialization", "SuiteSparse_jll"]
-uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
-version = "1.10.0"
+version = "1.11.0"
 
 [[Statistics]]
-deps = ["LinearAlgebra", "SparseArrays"]
+deps = ["LinearAlgebra"]
+git-tree-sha1 = "ae3bb1eb3bba077cd276bc5cfc337cc65c3075c0"
 uuid = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
-version = "1.10.0"
+version = "1.11.1"
 
-[[SuiteSparse_jll]]
-deps = ["Artifacts", "Libdl", "libblastrampoline_jll"]
-uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
-version = "7.2.1+1"
+    [Statistics.extensions]
+    SparseArraysExt = ["SparseArrays"]
+
+    [Statistics.weakdeps]
+    SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
 [[TOML]]
 deps = ["Dates"]
@@ -123,15 +132,18 @@ version = "1.0.3"
 [[Test]]
 deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+version = "1.11.0"
 
 [[UUIDs]]
 deps = ["Random", "SHA"]
 uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
+version = "1.11.0"
 
 [[Unicode]]
 uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
+version = "1.11.0"
 
 [[libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
-version = "5.8.0+1"
+version = "5.11.0+0"
