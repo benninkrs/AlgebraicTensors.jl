@@ -64,7 +64,7 @@ using MiscUtils
 using SuperTuples
 using StaticArrays
 using LinearAlgebra
-using TensorOperations: Index2Tuple, tensortrace, tensorcontract, tensoradd, tensorscalar, tensorproduct
+# using TensorOperations: Index2Tuple, tensortrace, tensorcontract, tensoradd, tensorscalar, tensorproduct
 
 using Base.Broadcast: Broadcasted, BroadcastStyle
 import Base: display, show
@@ -88,45 +88,6 @@ const Spaces{N} = Tuple{Vararg{Integer,N}}
 const Iterable = Union{Tuple, AbstractArray, UnitRange, Base.Generator}
 const Axes{N} = NTuple{N, AbstractUnitRange{<:Integer}}
 const SupportedArray{T,N} = DenseArray{T,N}		# can change this later.  Maybe to StridedArray?
-
-
-calc_strides(sz::Dims{N}) where {N} = cumprod(ntuple(i -> i==1 ? 1 : sz[i-1], Val(N)))
-calc_strides(ax::Axes{N}) where {N} = cumprod(ntuple(i -> i==1 ? 1 : last(ax[i-1]) - first(ax[i-1]) + 1, Val(N)))
-@inline calc_index(I::NTuple{N,Int}, strides::NTuple{N,Int}) where {N} = 1 + sum((I .- 1) .* strides)
-@inline calc_index(I::CartesianIndex{N}, strides::NTuple{N,Int}) where {N} = calc_index(Tuple(I), strides)
-
-
-# # Perform an operation along the diagonal of an array
-# # PROBABLY DOESN'T WORK FOR NON-SQUARE TENSORS
-# # Also, are some of my more recent approaches (a la DiagonalIndexing) faster?
-# macro diagonal_op(M, Idx, Op)
-# 	# M is the Tensor, Idx is the index, Op is the operation
-# 	escM = esc(M)
-# 	escIdx = esc(Idx)
-# 	escOp = esc(Op)
-# 	quote
-# 		#@warn "diagonal_op may not be correct for tensors with different left and right spaces"
-# 		if lspaces($escM) == rspaces($escM)
-# 			# Perfectly square -- no permuting necessary
-# 			# sum along diagonal
-# 			n = prod(lsize($escM))
-# 			@inbounds for $escIdx in 1:n+1:n^2
-# 				$escOp
-# 			end
-# 		else
-# 			# Same spaces but in a different order. Need to permute.
-# 			# An explicit loop is faster than reshaping into a matrix
-# 			strides_ = calc_strides(axes($escM))
-# 			strides = strides_[$escM.ldims] .+ strides_[$escM.rdims]
-# 			@inbounds for ci in CartesianIndices(axes($escM, $escM.ldims))
-# 				$escIdx = calc_index(ci, strides)
-# 				$escOp
-# 			end
-# 		end
-# 	end
-# end
-
-
 
 
 #--------------------------------
@@ -242,6 +203,7 @@ ndims(M::Tensor) = ndims(M.data)
 lspaces(M::Tensor{LS,RS}) where {LS, RS} = LS
 rspaces(M::Tensor{LS,RS}) where {LS,RS} = RS
 spaces(M::Tensor) = (lspaces(M)..., rspaces(M)...)
+spaces(M::Tensor, dims::Dims) = spaces(M)[dims]
 
 nlspaces(M) = length(lspaces(M))
 nrspaces(M) = length(rspaces(M))
@@ -252,7 +214,7 @@ size(M::Tensor, args...) = size(M.data, args...)
 lsize(M::Tensor) = ntuple(i -> size(M.data, i), nlspaces(M))
 rsize(M::Tensor) = ntuple(i -> size(M.data, i + nlspaces(M)), nrspaces(M))
 
-axes(M::Tensor, args...) = axes(M.data, args...)
+axes(M::Tensor) = axes(M.data)
 laxes(M::Tensor) = ntuple(i -> axes(M.data,i), nlspaces(M))
 raxes(M::Tensor) = ntuple(i -> axes(M.data, i + nlspaces(M)), nrspaces(M))
 
@@ -816,6 +778,16 @@ function ensure_same_spaces(A::Tensor, B::Tensor)
 error("A,B must have the same spaces")
 	nothing
 end
+
+
+function ensure_same_axes(A::Tensor, cdimsA, B::Tensor, cdimsB)
+	caxesA = axes(A, cdimsA)
+	caxesB = axes(B, cdimsB)
+	cspaces = spaces(A, cdimsA)
+	caxesA == caxesB || throw(DimensionMismatch("The paired axes of A and B do not match: axes(A, $cdimsA) = $caxesA,  axes(B, $cdimsB) = $caxesB"))
+	nothing
+end
+
 # Addition and subtraction
 
 -(M::Tensor) = Tensor(-M.data, M)
@@ -1023,8 +995,7 @@ function *(A::Tensor, B::Tensor)
 	
 	# Order produced by tensorcontract:  (ldimsA, urdimsA, uldimsB, rdimsB)
 	blocksizes = (nlspaces(A), length(urdimsA), length(uldimsB), nrspaces(B))
-	pc1 = blockperm(blocksizes, (1,3))
-	pc2 = blockperm(blocksizes, (2,4))
+	permC = blockperm(blocksizes, (1,3,2,4))
 	
 	# println("cdimsA = ", cdimsA)
 	# println("urdimsA = ", urdimsA)
@@ -1038,21 +1009,47 @@ function *(A::Tensor, B::Tensor)
 	# println("lspaces_ = ", lspaces_)
 	# println("rspaces_ = ", rspaces_)
 
-	data_ = tensorcontract(A.data, (odimsA, cdimsA), false, B.data, (cdimsB, odimsB), false, (pc1, pc2))
+	ensure_same_axes(A, cdimsA, B, cdimsB)
+
+	data_ = tensorcontract(A.data, (odimsA, cdimsA), B.data, (cdimsB, odimsB), permC)
 
 	return Tensor{lspaces_, rspaces_}(data_)
 end
 
 
 
-# faster version when right spaces of A exactly match the left spaces of B
-function *(A::Tensor{lspaces,cspaces}, B::Tensor{cspaces,rspaces}) where {lspaces, rspaces, cspaces}
-	# The right spaces of A are the same as the left spaces of B
-	axes(A)[rspace_srt_dims(A)] == axes(B)[lspace_srt_dims(B)] || throw(Base.DimensionMismatch("non-matching sizes in contracted dimensions")) 
-	data_= reshape(Matrix(A) * Matrix(B), (lsize(A)..., rsize(B)...))
-	Tensor{lspaces, rspaces}(data_)
-end
+# # faster version when right spaces of A exactly match the left spaces of B
+# function *(A::Tensor{lspaces,cspaces}, B::Tensor{cspaces,rspaces}) where {lspaces, rspaces, cspaces}
+# 	# The right spaces of A are the same as the left spaces of B
+# 	axes(A)[rspace_srt_dims(A)] == axes(B)[lspace_srt_dims(B)] || throw(Base.DimensionMismatch("non-matching sizes in contracted dimensions")) 
+# 	data_= reshape(Matrix(A) * Matrix(B), (lsize(A)..., rsize(B)...))
+# 	Tensor{lspaces, rspaces}(data_)
+# end
 
+
+permuteifneeded(A::AbstractArray, p::TTuple{Int}) = isidentityperm(p) ? A : permutedims(A, p)
+
+
+function tensorcontract(A, (odimsA, cdimsA), B, (cdimsB, odimsB), pC)
+	szOA = size(A, odimsA)
+	szOB = size(B, odimsB)
+	szCA = size(A, cdimsA)
+	szCB = size(B, cdimsB)
+
+	pA = (odimsA..., cdimsA...)
+	pB = (cdimsB..., odimsB...)
+
+	Ap = permuteifneeded(A, pA)
+	Bp = permuteifneeded(B, pB)
+	
+	Am = reshape(Ap, (prod(szOA), prod(szCA)))
+	Bm = reshape(Bp, (prod(szCB), prod(szOB)))
+	Cp = reshape(Am * Bm, (szOA..., szOB...))
+
+	C = permuteifneeded(Cp, pC)
+
+	return C
+end
 
 
 # TODO:  Have * dispatch to this case when appropriate/
@@ -1279,44 +1276,6 @@ function isin(spaces::Dims, ::Val{S}) where {S}
 	mask = ntuple(i -> (S & (SpacesInt(1) << (spaces[i]-1))) != SpacesInt(0), Val(length(spaces)))
 end
 
-# # find the dimensions of selected left spaces (specified by a SpacesInt)
-# #  sdims = dimensions corresponding to the sorted spaces specified by S
-# #				(typically a set of dimensions to be contracted)
-# #  odims = remaining dimensions in ORIGINAL or SORTED order
-# #				(typically a set of dimension that remain after contraction)
-# function findlspaces_old(M::Tensor, ::Val{S}; order) where {S}	# S is a SpacesInt
-# 	MS = binteger(SpacesInt, Val(lspaces(M)))
-# 	sdims = lspace_srt_dims(M)[findnzbits(S, MS)]
-# 	if order == :sorted
-# 		odims = findnzbits((~S & MS), MS)
-# 	elseif order == :original
-# 		odims = oneto(nlspaces(M))[isin(lspaces(M), Val(~S))]
-# 	else
-# 		error("Invalid order specified: $order")
-# 	end
-# 	return (sdims, odims)
-# end
-
-
-
-# # find the dimensions of selected right spaces (specified by a SpacesInt)
-# #  sdims = dimensions corresponding to the sorted spaces specified by S
-# #				(typically a set of dimensions to be contracted)
-# #  odims = remaining dimensions in ORIGINAL or SORTED order
-# #				(typically a set of dimension that remain after contraction)
-# function findrspaces_old(M::Tensor, ::Val{S}; order)  where {S}
-# 	MS = binteger(SpacesInt, Val(rspaces(M)))
-# 	sdims = rspace_srt_dims(M)[findnzbits(S, MS)]
-# 	if order == :sorted
-# 		odims = nlspaces(M) .+ findnzbits((~S & MS), MS)
-# 	elseif order == :original
-# 		odims = nlspaces(M) .+ oneto(nrspaces(M))[isin(rspaces(M), Val(~S))]
-# 	else
-# 		error("Invalid order specified: $order")
-# 	end
-# 	return (sdims, odims)
-# end
-
 
 # Find the dimensions of left spaces selected by a SpacesInt,
 # returned in either original or sorted order.
@@ -1347,6 +1306,10 @@ function findrspaces(M::Tensor, ::Val{S}; order) where {S}	# S is a SpacesInt
 end
 
 
+# TRUE if the permutation is the identity
+isidentityperm(p::TTuple{Int}) = (p == oneto(Val(length(p))))
+
+
 # Construct a permutation formed by reordering blocks of given sizes
 function blockperm(siz, perm)
 	cumsiz = (0, cumsum(siz[1:end-1])...)
@@ -1360,20 +1323,11 @@ function _blockperm(siz::Dims, cumsiz::Dims)
 end
 
 
-# # Compute the dimensions of selected spaces after the others are contracted out
-# function remain_dims(dims::Dims{N}, ::Val{S}, ::Val{K}) where {N, S, K}
-# 	# S and K should be SpacesInts
-# 	count_ones(S) == N || error("count_ones(S) must equal length(dims)")
-# 	idims = findnzbits(K, S)
-# 	kdims = dims[idims]
-# 	dims_ = sortperm(kdims)		# it infers!
-# 	# Should be equivalent
-# 	# dims_ = ntuple(Val(N_)) do i
-# 	# 	static_fn(0, Val(length(kdims))) do a,j
-# 	# 		kdims[j] <= kdims[i] ? a+1 : a		
-# 	# 	end
-# 	# end
-# end
+calc_strides(sz::Dims{N}) where {N} = cumprod(ntuple(i -> i==1 ? 1 : sz[i-1], Val(N)))
+calc_strides(ax::Axes{N}) where {N} = cumprod(ntuple(i -> i==1 ? 1 : last(ax[i-1]) - first(ax[i-1]) + 1, Val(N)))
+
+@inline calc_index(I::NTuple{N,Int}, strides::NTuple{N,Int}) where {N} = 1 + sum((I .- 1) .* strides)
+@inline calc_index(I::CartesianIndex{N}, strides::NTuple{N,Int}) where {N} = calc_index(Tuple(I), strides)
 
 
 end

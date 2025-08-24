@@ -103,11 +103,11 @@ end
     CC = AA*BB;
     @test (lspaces(CC), rspaces(CC)) == ((4,3,2,1,8), (11,10,9))
 
-    @info "Benchmarking small multiplication."  	# 140 ns (5 allocations: 272 bytes)
-    @btime $A*$B;
+    @info "Benchmarking small multiplication."  	
+    @btime $A*$B;				# 140 ns (5 allocations: 272 bytes)
 
-    @info "Benchmarking large multiplication."		# 60 μs (9 allocations: 23 KiB)
-    @btime $AA*$BB;
+    @info "Benchmarking large multiplication."		
+    @btime $AA*$BB;			# 60 μs (9 allocations: 23 KiB)
 end
 
 
