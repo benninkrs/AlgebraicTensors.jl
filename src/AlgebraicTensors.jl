@@ -59,7 +59,6 @@ module AlgebraicTensors
 export Tensor, lsize, rsize, spaces, lspaces, rspaces, nlspaces, nrspaces, sortspaces
 export tr, marginal, det, opnorm, eigvals, eigvecs, svdvals, svd, opnorm, ⊗
 
-export tensor_op
 
 using MiscUtils
 using SuperTuples
@@ -93,7 +92,8 @@ const SupportedArray{T,N} = DenseArray{T,N}		# can change this later.  Maybe to 
 
 calc_strides(sz::Dims{N}) where {N} = cumprod(ntuple(i -> i==1 ? 1 : sz[i-1], Val(N)))
 calc_strides(ax::Axes{N}) where {N} = cumprod(ntuple(i -> i==1 ? 1 : last(ax[i-1]) - first(ax[i-1]) + 1, Val(N)))
-@inline calc_index(I::CartesianIndex{N}, strides::NTuple{N,Int}) where {N} = 1 + sum((Tuple(I) .- 1) .* strides)
+@inline calc_index(I::NTuple{N,Int}, strides::NTuple{N,Int}) where {N} = 1 + sum((I .- 1) .* strides)
+@inline calc_index(I::CartesianIndex{N}, strides::NTuple{N,Int}) where {N} = calc_index(Tuple(I), strides)
 
 
 # # Perform an operation along the diagonal of an array
@@ -539,7 +539,7 @@ function transpose(M::Tensor, ::Val{tspaces}) where {tspaces}
 		return M
 	else
 
-		# transposed spaces that are on both left and right
+		# transposed spaces that are on both left and right, sorted
 		tsboth = findnzbits(TSB)
 
 		# transposed spaces that are only on the left or right
@@ -1054,6 +1054,8 @@ function *(A::Tensor{lspaces,cspaces}, B::Tensor{cspaces,rspaces}) where {lspace
 end
 
 
+
+# TODO:  Have * dispatch to this case when appropriate/
 """
 	⊗(A::Tensor, B::Tensor)
 
@@ -1062,8 +1064,7 @@ left (right) spaces of `B`. The output spaces are
 	lspaces(A⊗B) = (lspaces(A)..., lspaces(B)...)
 	rspaces(A⊗B) = (rspaces(A)..., rspaces(B)...)
 
-Some cases the outer product could also be obtained using `*`, but in that case
-the output spaces would be sorted. 
+The same result could be obtained using `*`, but using `⊗` is faster. 
 """
 function ⊗(A::Tensor, B::Tensor)
 	LA = lspaces_int(A)
